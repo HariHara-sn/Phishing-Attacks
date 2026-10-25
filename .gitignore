@@ -1,0 +1,28 @@
+# Python virtual environments and generated files
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node.js dependencies and build output
+node_modules/
+dist/
+build/
+
+# Local environment and log files
+# .env
+# .env.*
+!.env.example
+*.log
+
+# Operating system and editor temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
