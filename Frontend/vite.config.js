@@ -8,7 +8,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
-    allowedHosts: [".devtunnels.ms"],
+    allowedHosts: [".devtunnels.ms","ce94-103-218-112-70.ngrok-free.app"],
     proxy: {
       "/api": "http://127.0.0.1:8000",
     },

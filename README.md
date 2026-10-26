@@ -19,7 +19,8 @@ following unfamiliar links and granting browser permissions.
 3. The frontend sends the collected report to FastAPI at `POST /api/battery`.
    During development, Vite proxies `/api` requests to `http://127.0.0.1:8000`.
 4. The page displays the response. The backend retains the latest report in
-   memory and writes it to its terminal as structured JSON.
+   memory and logs a privacy-filtered summary as structured JSON. When the
+   local observability stack is running, the same summary is sent to Loki.
 
 The report can include:
 
@@ -39,9 +40,11 @@ verified identity.
 ## Privacy and safe-use requirements
 
 - Clipboard contents may include passwords, tokens, messages, or other private
-  data. The frontend can send up to 500 characters, and the backend includes
-  the full received report in terminal logs. **Do not use real clipboard
-  contents or personal data during demonstrations.** Use synthetic test data.
+  data. The frontend can send up to 500 characters, and the API response
+  contains the received value. The application excludes clipboard contents,
+  location, IP address, and device ID from its terminal and Loki log summaries.
+  **Do not use real clipboard contents or personal data during demonstrations.**
+  Use synthetic test data.
 - Location, device details, and IP address are sensitive. Obtain explicit,
   informed consent before testing, and explain what is collected, why, and
   where it is sent.
@@ -114,6 +117,52 @@ allows `*.devtunnels.ms` hostnames and proxies `/api` requests to the local
 backend on port `8000`. Ensure both local servers are running while using the
 tunnel; a stopped local server will cause the corresponding tunnel to fail.
 
+## Local logs with Loki and Grafana
+
+Docker Desktop with Docker Compose is required. Start the local observability
+services from the project root:
+
+```powershell
+cd D:\CyberProj\deviceInfo
+docker compose up -d
+```
+
+Install the backend dependency (or reinstall all backend requirements):
+
+```powershell
+cd D:\CyberProj\deviceInfo\Backend
+python -m pip install -r requirements.txt
+```
+
+Start or restart FastAPI after Loki is running. Application summary logs are
+printed as readable JSON in the backend terminal and sent to Loki as compact
+JSON. Loki and Grafana ports are bound to localhost only.
+
+1. Open <http://localhost:3000> and sign in (the initial Grafana credentials
+   are `admin` / `admin`; Grafana will prompt you to change the password).
+2. Add a **Loki** data source with URL `http://loki:3100`, then select **Save &
+   test**. This hostname works from Grafana's Docker container.
+3. In **Explore**, select the Loki data source and run:
+
+```logql
+{app="battery-api"}
+{app="battery-api", env="dev"} | json
+{app="battery-api"} | json | event="device_info_received"
+{app="battery-api"} | json | report_percentage < 20
+{app="battery-api"} | json | report_charging="false"
+{app="battery-api"} | json | report_device_type="phone"
+```
+
+The log report intentionally includes only battery percentage/status, broad
+device type, OS, browser, and receipt time. Clipboard text, exact location,
+client IP, and device ID are excluded from logs. The API response still contains
+the report fields described above. Stop the local stack when finished:
+
+```powershell
+cd D:\CyberProj\deviceInfo
+docker compose down
+```
+
 ## API endpoints
 
 - `POST /api/battery` — accepts the device report and returns the latest report.
@@ -133,3 +182,6 @@ Frontend/
   vite.config.js      Vite server and API proxy configuration
   package.json        Frontend scripts and dependencies
 ```
+
+
+opencode -s ses_e8d52fe0bffejZfQ1kroqyw2Eb

